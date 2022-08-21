@@ -83,9 +83,20 @@ export default class RunCommand extends BaseCommand {
       return await scriptUtils.executePackageScript(effectiveLocator, this.scriptName, this.args, {project, stdin: this.context.stdin, stdout: this.context.stdout, stderr: this.context.stderr});
 
     // If we can't find it, we then check whether one of the dependencies of the
-    // current package exports a binary with the requested name
+    // current package or the top level workspace exports a binary with the requested name
 
-    const binaries = await scriptUtils.getPackageAccessibleBinaries(effectiveLocator, {project});
+    const binaries = await (async () => {
+      const currentBinaries = await scriptUtils.getPackageAccessibleBinaries(effectiveLocator, {project});
+
+      if (!this.topLevel && workspace && project.topLevelWorkspace !== workspace) {
+        const topLevelWorkspaceBinaries = await scriptUtils.getPackageAccessibleBinaries(
+          project.topLevelWorkspace.anchoredLocator, {project: project.topLevelWorkspace.project});
+        return new Map([...topLevelWorkspaceBinaries, ...currentBinaries]);
+      }
+
+      return currentBinaries;
+    })();
+
     const binary = binaries.get(this.scriptName);
 
     if (binary) {
